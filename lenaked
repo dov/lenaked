@@ -1,0 +1,326 @@
+#!/usr/bin/perl
+######################################################################
+#  A program for interactively adding nikkud to a Hebrew text.
+#
+#  Dov Grobgeld <dov.grobgeld@gmail.com>
+#  2013-11-12 Tue
+######################################################################
+
+use strict;
+use Gtk2 -init;
+use Gtk2::SimpleList;
+use Gtk2::SimpleMenu;
+use base 'Locale::Maketext'; # inherits get_handle();
+use open IN => ':utf8';
+use open OUT => ':utf8';
+
+use constant TRUE => 1;
+use constant FALSE => 0;
+
+
+use Locale::Maketext::Lexicon {
+    en => ['Auto'],
+    '*' => ['Gettext' => '/usr/local/share/locale/*/LC_MESSAGES/gscanpages.mo'],
+};
+
+my $lh = __PACKAGE__->get_handle; # magically gets the current locale
+my $window;
+my $text_view;
+my $nikud_action_box;
+my @tab_buttons;
+my $opt_table;
+my $opt_width = 8;
+my %nikud_db;
+
+# Lookup and convert to UTF-8
+sub _ {
+    my $m = $lh->maketext(@_);
+    utf8::decode($m);  # Turn on UTF8-flag for string
+    $m;
+};
+
+my $menu_tree = [
+      _("File") => {
+              item_type => '<Branch>',
+              children => [
+                      _("New") => {
+  			      item_type=>"<StockItem>",
+  			      extra_data=>"gtk-new",
+  			      callback => \&cb_menu_new,
+                      },
+                      _("Open") => {
+  			      item_type=>"<StockItem>",
+  			      extra_data=>"gtk-open",
+  			      callback => \&cb_menu_open,
+                      },
+                      _("Save") => {
+  			      item_type=>"<StockItem>",
+  			      extra_data=>"gtk-save",
+  			      callback => \&cb_menu_save,
+                      },
+  		    Separator=> {
+  				 item_type=>"<Separator>",
+  				},
+                      _("Quit") => {
+  			      extra_data=>"gtk-quit",
+  			      item_type=>"<StockItem>",
+  			      callback => sub { Gtk2->main_quit; },
+                      },
+              ],
+      },
+      _("Tools") => {
+  	      item_type => '<Branch>',
+  	      children => [
+  			   _("Lenaked") => {
+  				      item_type => '<Item>',
+  				      callback => \&cb_start_lenaked,
+  				     },
+  			  ],
+      },
+      _("Help") => {
+              item_type => '<LastBranch>',
+              children => [
+                      _("About") => {
+  			       item_type => '<StockItem>',
+  			       extra_data=>"gtk-about",
+  			       callback=>\&cb_menu_about,
+                      },
+              ]
+      }
+];
+
+
+sub create_widgets {
+    $window = Gtk2::Window->new("toplevel");
+    $window->set_title("Lenaked");
+
+    $window->signal_connect( "destroy" => sub {
+				 Gtk2->main_quit;
+			     });
+    $window->set_size_request(500, 400);
+
+    my $box = new Gtk2::VBox;
+    $window->add($box);
+
+    my $menu = Gtk2::SimpleMenu->new (
+	menu_tree => $menu_tree,
+	default_callback => \&default_callback,
+	user_data => 'user_data',
+       );
+    $window->add_accel_group ($menu->{accel_group});
+    $box->pack_start( $menu->{widget}, FALSE, TRUE, 0 );
+
+    my $pane = Gtk2::VPaned->new();
+    $box->pack_start($pane, TRUE, TRUE, 0);
+
+    my $sw = new Gtk2::ScrolledWindow;
+    $text_view = new Gtk2::TextView;
+    $text_view->set_name("heb-text");
+    $text_view->set_wrap_mode("word");
+    my $text_buffer = $text_view->get_buffer();
+    $text_buffer->insert_at_cursor("The quick brown fox jumps over the lazy dog.");
+    $sw->add($text_view);
+    $pane->add1($sw);
+
+    # second pane for button box
+    my $vbox2 = Gtk2::VBox->new();
+    $pane->add2($vbox2);
+
+    my $hbox = Gtk2::HBox->new();
+    my $button_next = Gtk2::Button->new("Next");
+    $button_next->signal_connect("clicked", \&cb_next);
+    my $button_prev = Gtk2::Button->new("Prev");
+    $button_prev->signal_connect("clicked", \&cb_prev);
+    my $button_stop = Gtk2::Button->new("Stop");
+    $button_stop->signal_connect("clicked", \&cb_stop_lenaked);
+    foreach my $b ($button_next, $button_prev, $button_stop) {
+	$hbox->pack_start($b, FALSE, FALSE, 0);
+    }
+    $vbox2->pack_start($hbox, FALSE, FALSE, 0);
+    $vbox2->pack_start(Gtk2::HSeparator->new, FALSE, FALSE, 0);
+    $nikud_action_box = $hbox;
+    
+    $opt_table = Gtk2::Table->new(5,5,1);
+    $vbox2->pack_start($opt_table, TRUE, TRUE, 0);
+    push(@tab_buttons, Gtk2::Button->new("hello"));
+    $opt_table->attach($tab_buttons[0],
+		       0,1,0,1,
+		       ['fill','expand'],['fill','expand'],
+		       0,0);
+    
+    $window->show_all;
+    $nikud_action_box->hide();
+}
+
+sub cb_menu_about {
+    my $dialog = Gtk2::Dialog->new('Message', $window,
+				   'destroy-with-parent',
+				   'gtk-ok' => 'none'
+				  );
+    $dialog->signal_connect (response => sub { $_[0]->destroy });
+    my $label = Gtk2::Label->new();
+    my $markup = sprintf ("<span size=\"xx-large\" weight=\"bold\">Lenaked 0.1</span>\n\n"
+			  ."%s\n\n"
+			  ."<span>%s\n%sEmail: <tt>&lt;%s&gt;</tt></span>\n",
+			  _("A program for putting vowels in Hebrew"),
+			  ("Copyright &#x00a9; Dov Grobgeld, 2007\n"),
+			  ("GPL\n"),
+			  ("dov.grobgeld\@gmail.com"));
+    $label->set_markup($markup);
+    $label->set_justify('center');
+    
+    $dialog->vbox->add($label);
+
+    $dialog->show_all();
+}
+
+sub cb_start_lenaked {
+    my $text_buffer = $text_view->get_buffer();
+    # sweep one word at a time
+
+    # mark the first word
+    my $iter = $text_buffer->get_iter_at_line(0);
+    $text_buffer->place_cursor($iter);
+
+    # Move selection mark one word forwards
+    $iter->forward_word_end();
+    my $smark = $text_buffer->get_mark("selection_bound");
+    $text_buffer->move_mark($smark, $iter);
+
+    $nikud_action_box->show();
+    create_matches();
+}
+
+sub cb_next {
+    my $text_buffer = $text_view->get_buffer();
+    # Move selection mark one word forwards
+    my $smark = $text_buffer->get_mark("selection_bound");
+    my $iter = $text_buffer->get_iter_at_mark($smark);
+    $iter->forward_word_end();
+    $iter->backward_word_start();
+    $text_buffer->place_cursor($iter);
+    $iter->forward_word_end();
+    $text_buffer->move_mark($smark, $iter);
+    create_matches();
+
+}
+
+sub cb_prev {
+    my $text_buffer = $text_view->get_buffer();
+    # Move selection mark one word forwards
+    my $smark = $text_buffer->get_mark("selection_bound");
+    my $iter = $text_buffer->get_iter_at_mark($smark);
+    $iter->backward_word_starts(2);
+    $text_buffer->place_cursor($iter);
+    $iter->forward_word_end();
+    $text_buffer->move_mark($smark, $iter);
+    create_matches();
+}
+
+sub cb_stop_lenaked {
+    my $text_buffer = $text_view->get_buffer();
+    my $iter = $text_buffer->get_end_iter();
+    $text_buffer->place_cursor($iter);
+    $nikud_action_box->hide();
+    destroy_buttons();
+}
+
+sub destroy_buttons {
+    foreach my $t (@tab_buttons) {
+	destroy $t;
+    }
+    @tab_buttons = ();
+}
+
+sub create_matches {
+    my $text_buffer = $text_view->get_buffer();
+    destroy_buttons();
+    my $imark = $text_buffer->get_mark("insert");
+    my $smark = $text_buffer->get_mark("selection_bound");
+    my $ins_iter = $text_buffer->get_iter_at_mark($imark);
+    my $sel_iter = $text_buffer->get_iter_at_mark($smark);
+    my $sel_text = $text_buffer->get_text($ins_iter, $sel_iter, TRUE);
+
+    my $w_can = canon($sel_text);
+    my (@list);
+    push(@list, @{$nikud_db{$w_can}}) if exists $nikud_db{$w_can};
+    my %seen;
+    unshift(@list, $sel_text);
+
+    foreach my $l (@list) {
+	next if $seen{$l};
+	my $button = Gtk2::Button->new($l);
+	$button->set_name("heb-button");
+	$button->{label} = $l;
+	$button->signal_connect("clicked", \&cb_replace_selection);
+	push(@tab_buttons, $button);
+	$seen{$l}++;
+    }
+    
+    my $idx = 0;
+    foreach my $b (@tab_buttons) {
+	my $col = $idx % $opt_width;
+	my $row = int($idx/$opt_width);
+	$opt_table->attach($b,
+			   $col,$col+1,$row,$row+1,
+			   ['fill','expand'],['fill','expand'],
+			   0,0);
+	$b->show();
+	$idx++;
+    }
+#    print "sel_text = $sel_text\n";
+}
+
+sub cb_replace_selection {
+    my $this = shift;
+    my $text_buffer = $text_view->get_buffer();
+    my $text = $this->{label};
+    my $imark = $text_buffer->get_mark("insert");
+    my $smark = $text_buffer->get_mark("selection_bound");
+    my $ins_iter = $text_buffer->get_iter_at_mark($imark);
+    my $sel_iter = $text_buffer->get_iter_at_mark($smark);
+    $text_buffer->delete($ins_iter, $sel_iter);
+    $text_buffer->insert_at_cursor("\U$text");
+    cb_next();
+}
+
+sub read_db {
+    open(DB, "nikud-db.utf8");
+    while(<DB>) {
+	my($w, $list) = /^(\w+)\s*=>\s*\[(.*?)\]/;
+	$nikud_db{$w} = [split(' ', $list)];
+    }
+}
+
+sub canon {
+    my $w = shift;
+
+    # Get rid of everything except the letters
+    $w=~ s/[^\x{5d0}-\x{5ea}]//g;
+
+    return $w;
+}
+
+Gtk2::Rc->parse_string(<<__);
+    
+style "big" {
+    font_name ="serif 30"
+}
+
+style "heb-button" {
+    font_name = "AAA 20"
+}
+style "heb-text" {
+    font_name = "AAA 18"
+}
+
+widget "*heb-button*" style "heb-button"
+widget "*heb-text*" style "heb-text"
+__
+
+
+read_db();
+create_widgets();
+
+Gtk2->main();
+

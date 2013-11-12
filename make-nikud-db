@@ -1,0 +1,102 @@
+#!/usr/bin/perl
+
+######################################################################
+#  A program that parses files and builds a nikuddb.
+#
+#  Dov Grobgeld <dov.grobgeld@gmail.com>
+#  2013-11-12 Tue
+######################################################################
+
+use open IN => ':utf8';
+use open OUT => ':utf8';
+my %nikud_db;
+
+my $do_1255;
+
+while($_ = $ARGV[0], /^-/) {
+    shift;
+    /^-1255/ and do { $do_1255++; next; };
+    die "Unknown option $_!\n";
+}
+
+open (OUT, ">nikud-db.utf8");
+foreach $f (@ARGV) {
+    print $f,"\n";
+    if ($do_1255) {
+	open(IN, "iconv -f windows-1255 -t utf-8 $f|");
+    }
+    else {
+	open(IN, $f);
+    }
+    my $text = lig_open(join("", <IN>));
+    while($text=~ /[\x{591}-\x{5ea}\x{FB20}-\x{FB4F}]+/g) {
+#	print OUT "w=$&\n";
+	my $w = $&; # lig_open($&);
+	my $wcan = canon($w);
+	$nikud_db{$wcan} = {} unless exists $nikud_db{$wcan};
+	$nikud_db{$wcan}->{$w}++ unless $wcan eq $w;
+    }
+}
+# output db
+foreach my $k (sort keys %nikud_db) {
+#    next unless (keys %{$nikud_db{$k}} > 1);
+    my $s = "$k => [";
+    my @v;
+    foreach my $v (sort keys %{$nikud_db{$k}}) {
+	push(@v, $v);
+    }
+    $s .= join(" ", @v) . "]\n";
+    print OUT $s;
+}
+    
+
+sub lig_open {
+    my $w = shift;
+    $w=~ s/\x{FB1D}/\x{5d9}\x{5b4}/g;  # Yod with hiriq
+    $w=~ s/\x{FB20}/\x{5e2}/g;
+    $w=~ s/\x{FB2A}/\x{5e9}\x{5c1}/g; # shin with shin dot
+    $w=~ s/\x{FB2B}/\x{5e9}\x{5c2}/g; # sin with sin dot
+    $w=~ s/\x{FB2C}/\x{5e9}\x{5bc}\x{5c1}/g; # shin with dagesh and  shin dot
+    $w=~ s/\x{FB2D}/\x{5e9}\x{5bc}\x{5c2}/g; # sin with dagesh and sin dot
+    $w=~ s/\x{FB2E}/\x{5d0}\x{5b7}/g; # aleph with patach
+    $w=~ s/\x{FB2F}/\x{5d0}\x{5b8}/g; # aleph with qamatz
+    $w=~ s/\x{FB30}/\x{5d0}\x{5bc}/g; # aleph with mapiq
+    $w=~ s/\x{FB31}/\x{5d1}\x{5bc}/g; # bet with dagesh
+    $w=~ s/\x{FB32}/\x{5d2}\x{5bc}/g; # 
+    $w=~ s/\x{FB33}/\x{5d3}\x{5bc}/g; # 
+    $w=~ s/\x{FB34}/\x{5d4}\x{5bc}/g; # 
+    $w=~ s/\x{FB35}/\x{5d5}\x{5bc}/g; # 
+    $w=~ s/\x{FB36}/\x{5d6}\x{5bc}/g; # 
+    $w=~ s/\x{FB37}/\x{5d7}\x{5bc}/g; # 
+    $w=~ s/\x{FB38}/\x{5d8}\x{5bc}/g; # 
+    $w=~ s/\x{FB39}/\x{5d9}\x{5bc}/g; # 
+    $w=~ s/\x{FB3A}/\x{5da}\x{5bc}/g; # 
+    $w=~ s/\x{FB3B}/\x{5db}\x{5bc}/g; # 
+    $w=~ s/\x{FB3C}/\x{5dc}\x{5bc}/g; # 
+    $w=~ s/\x{FB3D}/\x{5dd}\x{5bc}/g; # 
+    $w=~ s/\x{FB3E}/\x{5de}\x{5bc}/g; # 
+    $w=~ s/\x{FB3F}/\x{5df}\x{5bc}/g; # 
+    $w=~ s/\x{FB40}/\x{5e0}\x{5bc}/g; # 
+    $w=~ s/\x{FB41}/\x{5e1}\x{5bc}/g; # 
+    $w=~ s/\x{FB42}/\x{5e2}\x{5bc}/g; # 
+    $w=~ s/\x{FB43}/\x{5e3}\x{5bc}/g; # 
+    $w=~ s/\x{FB44}/\x{5e4}\x{5bc}/g; # 
+    $w=~ s/\x{FB45}/\x{5e5}\x{5bc}/g; # 
+    $w=~ s/\x{FB46}/\x{5e6}\x{5bc}/g; # 
+    $w=~ s/\x{FB47}/\x{5e7}\x{5bc}/g; # 
+    $w=~ s/\x{FB48}/\x{5e8}\x{5bc}/g; # 
+    $w=~ s/\x{FB49}/\x{5e9}\x{5bc}/g; # 
+    $w=~ s/\x{FB4A}/\x{5eA}\x{5bc}/g; # taf with dagesh
+    $w=~ s/\x{FB4B}/\x{5d5}\x{5b9}/g; # vav with holam
+
+    return $w;
+}
+
+sub canon {
+    my $w = shift;
+
+    # Get rid of everything except the letters
+    $w=~ s/[^\x{5d0}-\x{5ea}]//g;
+
+    return $w;
+}
