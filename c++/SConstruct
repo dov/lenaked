@@ -1,0 +1,165 @@
+import re, os, glob
+
+if ARGUMENTS.get('debug', 0):
+    cppflags = ['-g', '-Wall']
+    variant = 'Debug'
+else:
+    cppflags = ['-O2']
+    variant = 'Release'
+
+commit_id = os.popen('git rev-parse HEAD').read().replace('\n','')
+
+env = Environment(LIBPATH=[],
+                  CPPFLAGS = cppflags + ['-Wno-deprecated-declarations',
+                                         '-Wno-reorder',
+                                         '-Wno-unused-but-set-variable',
+                                         '-Wno-unused-function'],
+                  CXXFLAGS=['-std=c++1y']
+                  )
+
+env['NAME'] = "lenaked"
+env['CAMELNAME'] = "Lenaked"
+env['CAPNAME'] = "LENAKED"
+env['COMMITIDSHORT'] = commit_id[0:6]
+commit_id = os.popen('git rev-parse HEAD').read().replace('\n','')
+commit_time = os.popen('git log --pretty=\'%ci\' -n1').read().replace('\n','')
+env['VER'] = "0.1.0"
+
+env.Command("COPYING.dos",
+            "COPYING",
+            ["unix2dos < COPYING > COPYING.dos"])
+
+# All purpose template filling routine
+def create_version(env, target, source):
+    out = open(str(target[0]), "wb")
+    out.write(bytes("#define VERSION \"" + env['VER'] + "\"\n",'ascii'))
+    out.write(bytes('#define GIT_COMMIT_ID \"' + commit_id + '"\n','ascii'))
+    out.write(bytes('#define GIT_COMMIT_TIME \"' + commit_time + '"\n','ascii'))
+    out.write(bytes('#define ARCH \"' + env['ARCH'] + '"\n','ascii'))
+    out.close()
+
+if ARGUMENTS.get('mingw', 0) or ARGUMENTS.get('mingw64', 0):
+    if ARGUMENTS.get('mingw', 0):
+        env['HOST']='w32'
+        env['HOSTBITS']='32'
+        env['ARCH']='i686-w64-mingw32'
+        env['LIBGCCDLL'] = "libgcc_s_sjlj-1.dll"
+    elif ARGUMENTS.get('mingw64', 0):
+        env['HOST']='w64'
+        env['HOSTBITS']='64'
+        env['ARCH']='x86_64-w64-mingw32'
+        env['LIBGCCDLL'] = "libgcc_s_seh-1.dll"
+
+    # For plugins
+    env['ARCHDIR']='ming${HOST}'
+
+    env.Command("COPYING.dos",
+                "COPYING",
+                ["unix2dos < COPYING > COPYING.dos"])
+    
+    env.Command("Install${CAMELNAME}${VER}-${HOST}.exe",
+                ["${NAME}.exe",
+                 "${NAME}.nsi",
+                 ],
+                ["makensis -DNAME=${NAME} -DCAMELNAME=${CAMELNAME} -DCAPNAME=${CAPNAME} -DHOSTBITS=${HOSTBITS} -DVER=${VER} -DHOST=${HOST} -DSYSROOT=${SYSROOT} -DLIBGCCDLL=${LIBGCCDLL} -DCOMMITIDSHORT=${COMMITIDSHORT} ${NAME}.nsi"])
+    env.Append(LINKFLAGS=['-mwindows'])
+
+    env['PACKAGE_DOC_DIR'] = '../doc'
+    env['PACKAGE_PLUGIN_DIR'] = '../plugins'
+    env.Append(CPPFLAGS= ['-mms-bitfields'])
+    env['OBJSUFFIX']=".obj"
+    env['PROGSUFFIX'] = ".exe"
+    env['SHOBJSUFFIX']=".obj"
+    env['SHLIBSUFFIX'] = ".dll"
+    env['SHLIBPREFIX'] = ""
+    env['DLLWRAP_FLAGS'] = "--mno-cygwin --as=${AS} --export-all --driver-name ${CXX} --dll-tool-name ${DLLTOOL} -s"
+    env['ROOT'] = ""
+    env['SYSROOT'] = r"\\usr\\${ARCH}\\sys-root"
+    env['LOCAL_DIR']='ming${HOST}'
+    env['PREFIX']='/usr/local/${LOCAL_DIR}'
+    env['CC']='${ARCH}-gcc'
+    env['CXX']='${ARCH}-g++'
+    env['AR']='${ARCH}-ar'
+    env['RANLIB']='${ARCH}-ranlib'
+    env['DLLWRAP'] = "${ARCH}-dllwrap"
+    env['DLLTOOL'] = "${ARCH}-dlltool"
+    env['WINDRES'] = "${ARCH}-windres"
+    env['PKGCONFIG'] = "env PKG_CONFIG_PATH=/usr/${ARCH}/sys-root/mingw/lib/pkgconfig:/usr/local/${LOCAL_DIR}/lib/pkgconfig pkg-config"
+
+else:
+    # Posix by default
+    env['PKGCONFIG'] = "pkg-config"
+    env['LIBPATH'] = []
+    # Needed for maemo!
+    env['SBOX'] = 'SBOX_UNAME_MACHINE' in os.environ
+    if env['SBOX']:
+        env['ENV'] = os.environ
+    env['PKG_CONFIG_PATH'] = "/usr/lib/pkgconfig"
+    env['PREFIX'] = "/usr/local"
+    env['PACKAGE_DOC_DIR'] = '${PREFIX}/share/doc/giv'
+    env['PACKAGE_PLUGIN_DIR'] = '${PREFIX}/lib/giv-1.0/plugins'
+    env['ARCHDIR']='linux'
+    env['ARCH'] = 'x86_64 GNU/Linux'
+
+env['VARIANT'] = variant
+
+# Since we don't run configure when doing scons
+config_target = env.Command("config.h",
+                            [],
+                            create_version)
+env.AlwaysBuild(config_target)
+env.Append(CPPPATH=[],
+           # Needed for our internal PCRE
+           CPPDEFINES=['PCRE_STATIC'],
+           LIBPATH=["#/plis",
+                    ],
+           )
+
+env.ParseConfig("${PKGCONFIG} --cflags --libs gtk+-2.0")
+env.SConscript("plis/SConscript",
+               exports='env')
+
+# This probably exists in scons already
+def file2c(env, target, source):
+    out = open(str(target[0]), "wb")
+    inp = open(str(source[0]), "rb")
+
+    for line in inp.readlines():
+        line = line.rstrip().decode()
+        line = re.sub("\\\\", "\\\\", line)
+        line = re.sub("\\\"", "\\\"", line)
+        line = '"'+line+'\\n"\n'
+        out.write(bytes(line,'ascii'))
+        
+    out.close()
+    inp.close()
+
+for f in ['menu-top.xml']:
+    env.Command(f.replace('.','-')+'.i',
+                f,
+                file2c)
+
+env.Program("lenaked",
+            ["lenaked.cc"],
+            LIBS = ['plisx','pcre'] + env['LIBS'],
+            LIBPATH = ['plis'] + env['LIBPATH'],
+            CPPPATH = ['plis'] + env['CPPPATH'],
+            )
+
+env.Alias("install",
+          [env.Install('/usr/local/bin',
+                       '#/src/giv'),
+           env.Install('/usr/local/lib',
+                       [
+#                           '#/src/libgiv-widget.so',
+                           '#/src/libgiv-image.so',
+                           ]
+                       ),
+           env.Install('${PACKAGE_PLUGIN_DIR}',
+                       glob.glob('src/plugins/*.so')),
+           env.Install('/usr/local/share/doc/giv',
+                       [g for g in glob.glob('doc/*')
+                        if re.search('\.(png|html|jpg)$',g)]
+                       )
+           ])
+

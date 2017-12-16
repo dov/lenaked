@@ -12,14 +12,16 @@ use open OUT => ':utf8';
 my %nikud_db;
 
 my $do_1255;
+my $db_name = "nikud-db.utf8";
 
 while($_ = $ARGV[0], /^-/) {
     shift;
     /^-1255/ and do { $do_1255++; next; };
+    /^-o/ and do { $db_name = shift; next; };
     die "Unknown option $_!\n";
 }
 
-open (OUT, ">nikud-db.utf8");
+open (OUT, ">$db_name");
 foreach $f (@ARGV) {
     print $f,"\n";
     if ($do_1255) {

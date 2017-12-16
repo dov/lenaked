@@ -1,0 +1,10 @@
+.sconsign.dblite
+/c++/COPYING.dos
+*.exe
+/c++/config.h
+/c++/lenaked
+*~
+*.o
+*.obj
+.xml.i
+vgcore*
