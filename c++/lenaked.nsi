@@ -43,10 +43,11 @@ File ${SYSROOT}\mingw\bin\iconv.dll
 File ${SYSROOT}\mingw\bin\libpcre-1.dll
 File ${SYSROOT}\mingw\bin\libintl-8.dll
 File ${SYSROOT}\mingw\bin\libffi-6.dll
-File ${SYSROOT}\mingw\bin\libgdk-win32*.dll
 File ${SYSROOT}\mingw\bin\libgdk_pixbuf*.dll
-File ${SYSROOT}\mingw\bin\libgtk-win32*.dll
+File ${SYSROOT}\mingw\bin\libgtk-3-0.dll
+File ${SYSROOT}\mingw\bin\libgdk-3-0.dll
 File ${SYSROOT}\mingw\bin\libgio*.dll
+File ${SYSROOT}\mingw\bin\libepoxy-0.dll
 File ${SYSROOT}\mingw\bin\libcairo*.dll
 File ${SYSROOT}\mingw\bin\libjasper*.dll
 File ${SYSROOT}\mingw\bin\zlib*.dll
@@ -63,16 +64,25 @@ File ${SYSROOT}\mingw\bin\libfreetype*.dll
 File ${SYSROOT}\mingw\bin\libbz2*.dll
 File ${SYSROOT}\mingw\bin\libwinpthread*.dll
 
-SetOutPath $INSTDIR\etc
-File /r ${SYSROOT}\mingw\etc
+# Not sure that I need this. It doesn't seem to make any difference.
+SetOutPath $INSTDIR\etc\settings
+FileOpen $9 settings.ini w ;Opens a Empty File an fills it
+FileWrite $9 "[Settings]$\r$\n"
+FileWrite $9 "gtk-theme-name=MS-Windows$\r$\n"
+FileClose $9 ;Closes the filled file
+
 SetOutPath $INSTDIR\lib\gdk-pixbuf-2.0\2.10.0
 File /r ${SYSROOT}\mingw\lib\gdk-pixbuf-2.0\2.10.0\loaders
-SetOutPath $INSTDIR\lib\gdk-pixbuf-2.0\2.10.0
-File ${SYSROOT}\mingw\lib\gdk-pixbuf-2.0\2.10.0\loaders.cache
-SetOutPath $INSTDIR\lib\gtk-2.0\2.10.0\engines
-File ${SYSROOT}\mingw\lib\gtk-2.0\2.10.0\engines\*
 SetOutPath $INSTDIR\share\themes 
 File /r ${SYSROOT}\mingw\share\themes\*
+SetOutPath $INSTDIR\share\icons\Adwaita\16x16
+File /r ${SYSROOT}\mingw\share\icons\Adwaita\16x16\actions
+SetOutPath $INSTDIR\share\icons\Adwaita\22x22
+File /r ${SYSROOT}\mingw\share\icons\Adwaita\22x22\actions
+SetOutPath $INSTDIR\share\icons\Adwaita\48x48
+File /r ${SYSROOT}\mingw\share\icons\Adwaita\48x48\actions
+SetOutPath $INSTDIR\share\icons\Adwaita\64x64
+File /r ${SYSROOT}\mingw\share\icons\Adwaita\64x64\actions
 
 # Build the gdk-pixbuf.loaders file automatically
 #ExpandEnvStrings $0 %COMSPEC%
