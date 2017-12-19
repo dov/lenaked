@@ -29,10 +29,12 @@ File COPYING
 File README.md
 File AUTHORS
 File NEWS
+File lenaked.css
 
 ; databases
 File ..\nikud-db.utf8
 File ..\bialik.db
+
 
 SetOutPath $INSTDIR\bin
 File ${NAME}.exe

@@ -270,6 +270,18 @@ void cb_prev(GtkWidget *widget, gpointer data)
     create_matches();
 }
 
+llip unique(llip list)
+{
+    set<slip> words;
+    for (auto v : list) {
+        if (words.count(v))
+            continue;
+        words.insert(v);
+        list.push_back(v);
+    }
+    return list;
+}
+
 void cb_add(GtkWidget *widget, gpointer data)
 {
     auto dialog = gtk_dialog_new_with_buttons("TBD",
@@ -296,10 +308,8 @@ void cb_add(GtkWidget *widget, gpointer data)
     gtk_widget_destroy(dialog);
 
     if (ret == GTK_RESPONSE_OK) {
-        llip words;
-        words.push_back(can_form);
-        words.push_back(selection);
-        nikud_db[can_form] = words;
+        nikud_db[can_form].push(selection);
+        nikud_db[can_form] = unique(nikud_db[can_form]);
     }        
 }
 
@@ -618,9 +628,45 @@ int main(int argc, char **argv)
                                     "    font: 24px \"sans\"\n"
                                     "}\n"
                                     "#heb-text {\n"
-                                    "    font:  22px\"sans\"\n"
+                                    "    font:  22px \"sans\"\n"
                                     "}\n",
                                     -1, NULL);
+
+    const gchar *config_dir = g_get_user_config_dir();
+    printf("config_dir = %s\n", config_dir);
+
+    slip path = slip(config_dir) + "/lenaked.css";
+    if (g_file_test(path.c_str(), G_FILE_TEST_EXISTS)) 
+        gtk_css_provider_load_from_path(GTK_CSS_PROVIDER(provider),
+                                        path.c_str(),
+                                        NULL);
+        
+    path = "lenaked.css";
+    if (g_file_test(path.c_str(), G_FILE_TEST_EXISTS)) 
+        gtk_css_provider_load_from_path(GTK_CSS_PROVIDER(provider),
+                                        path.c_str(),
+                                        NULL);
+
+#ifdef _WIN32
+    {
+      char buffer[MAX_PATH];
+      std::wstring_convert<std::codecvt_utf8<wchar_t>> utf8_conv;
+      GetModuleFileName(NULL, buffer, MAX_PATH);
+      slip path(buffer);
+      path.s("(.*)\\\\.*$","$1");  // Though there probably is a basename in glib...
+      read_db(path + "\\..\\nikud-db.utf8");
+
+      path = path + "\\..\\lenaked.css";
+      if (g_file_test(path.c_str(), G_FILE_TEST_EXISTS)) 
+          gtk_css_provider_load_from_path(GTK_CSS_PROVIDER(provider),
+                                          path.c_str(),
+                                          NULL);
+
+    }
+#else
+    read_db("../nikud-db.utf8");
+#endif
+
     g_object_unref(provider);
 
     while(argp < argc && argv[argp][0] == '-') {
@@ -638,16 +684,6 @@ int main(int argc, char **argv)
         die("Unknown option %s!\n", S_);
     }
 
-#ifdef _WIN32
-    char buffer[MAX_PATH];
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> utf8_conv;
-    GetModuleFileName(NULL, buffer, MAX_PATH);
-    slip path(buffer);
-    path.s("(.*)\\\\.*$","$1");  // Though there probably is a basename in glib...
-    read_db(path + "\\..\\nikud-db.utf8");
-#else
-    read_db("../nikud-db.utf8");
-#endif
     create_widgets();
     
     gtk_main();
