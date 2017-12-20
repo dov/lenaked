@@ -62,7 +62,8 @@ if ARGUMENTS.get('mingw', 0) or ARGUMENTS.get('mingw64', 0):
                  "${NAME}.nsi",
                  ],
                 ["makensis -DNAME=${NAME} -DCAMELNAME=${CAMELNAME} -DCAPNAME=${CAPNAME} -DHOSTBITS=${HOSTBITS} -DVER=${VER} -DHOST=${HOST} -DSYSROOT=${SYSROOT} -DLIBGCCDLL=${LIBGCCDLL} -DCOMMITIDSHORT=${COMMITIDSHORT} ${NAME}.nsi"])
-    env.Append(LINKFLAGS=['-mwindows'])
+    env.Append(LINKFLAGS=['-mwindows']
+               )
 
     env['PACKAGE_DOC_DIR'] = '../doc'
     env['PACKAGE_PLUGIN_DIR'] = '../plugins'

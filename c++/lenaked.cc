@@ -79,6 +79,8 @@ void cb_replace_selection(GtkWidget *widget, gpointer data);
 constexpr int opt_width = 8;
 
 map<slip, llip> nikud_db;
+map<slip, llip> user_nikud_db;  // User additions
+slip user_db_filename;
 
 static void die(const char *fmt, ...)
 {
@@ -89,19 +91,46 @@ static void die(const char *fmt, ...)
     exit(-1);
 }
 
-static void read_db(slip db_filename)
+static void read_db(map<slip, llip>& db, slip db_filename)
 {
     ifstream inf(db_filename.c_str());
-    nikud_db.clear();
+    if (!inf.good())
+        return;  // No data found
+    db.clear();
     slip S_;
     while(inf >> S_) {
         llip match;
         if (S_.m("^(\\S+)\\s*=>\\s*\\[(.*?)\\]",match)) {
             slip w = match[1];
             llip word_list = match[2].split(" ");
-            nikud_db[w] = word_list;
+            db[w] = word_list;
         }
     }
+}
+
+llip unique(llip list)
+{
+    set<slip> words;
+    llip ulist;
+    for (auto v : list) {
+        if (words.count(v))
+            continue;
+        words.insert(v);
+        ulist.push_back(v);
+    }
+    return ulist;
+}
+
+static void save_db(map<slip, llip>& db, slip db_filename)
+{
+    ofstream ouf(db_filename.c_str());
+    if (!ouf.good())
+        return;  // Oops
+    for (auto& kv : db) 
+        ouf << kv.first
+            << " => "
+            << "[" << unique(kv.second).join(" ") << "]"
+            << "\n";
 }
 
 static slip canon(slip w)
@@ -150,6 +179,23 @@ slip get_selection()
     return ret;
 }
 
+// Get a list of matches from the corpus and the user lis
+llip get_match_list(const slip& can_text)
+{
+    llip ret;
+
+    if (nikud_db.count(can_text))
+        for (auto v : nikud_db[can_text])
+            ret.push(v);
+    if (user_nikud_db.count(can_text))
+        for (auto v : user_nikud_db[can_text])
+            ret.push(v);
+
+    return ret;
+}
+
+// Special treatment characters
+
 #define LETTER_BET "ב"
 #define LETTER_VAV "ו"
 #define LETTER_HE "ה"
@@ -163,34 +209,33 @@ void create_matches()
 
     llip list;
     list.push_back(sel_text);
-    if (nikud_db.count(can_text)) {
-        for (auto v : nikud_db[can_text])
-            list.push_back(v);
-    }
+
+    for (auto v : get_match_list(can_text))
+        list.push_back(v);
 
     // Do some special cases for prefix letters.
     if (can_text.starts_with(LETTER_BET)) {
         slip prefix = "בְּ";
-        slip rest = can_text.substr(1);
-        for (auto v : nikud_db[rest])
+        slip rest = can_text.substr(2);  // Make use of the fact that a hebrew character is 2 bytes!
+        for (auto v : get_match_list(rest))
             list.push_back(prefix + v);
     }
     if (can_text.starts_with(LETTER_VAV)) {
         slip prefix = "וְ";
-        slip rest = can_text.substr(1);
-        for (auto v : nikud_db[rest])
+        slip rest = can_text.substr(2);
+        for (auto v : get_match_list(rest))
             list.push_back(prefix + v);
     }
     if (can_text.starts_with(LETTER_MEM)) {
         slip prefix = "מִ";
-        slip rest = can_text.substr(1);
-        for (auto v : nikud_db[rest])
+        slip rest = can_text.substr(2);
+        for (auto v : get_match_list(rest))
             list.push_back(prefix + v);
     }
     if (can_text.starts_with(LETTER_HE)) {
-        slip rest = can_text.substr(1);
+        slip rest = can_text.substr(2);
         for (const auto& prefix : { "הָ","הַ", "הֶ" }) {
-            for (auto v : nikud_db[rest])
+            for (auto v : get_match_list(rest))
                 list.push_back(prefix + v);
         }
     }
@@ -303,18 +348,6 @@ void cb_prev(GtkWidget *widget, gpointer data)
     create_matches();
 }
 
-llip unique(llip list)
-{
-    set<slip> words;
-    for (auto v : list) {
-        if (words.count(v))
-            continue;
-        words.insert(v);
-        list.push_back(v);
-    }
-    return list;
-}
-
 void cb_add(GtkWidget *widget, gpointer data)
 {
     auto dialog = gtk_dialog_new_with_buttons("TBD",
@@ -341,9 +374,11 @@ void cb_add(GtkWidget *widget, gpointer data)
     gtk_widget_destroy(dialog);
 
     if (ret == GTK_RESPONSE_OK) {
-        nikud_db[can_form].push(selection);
-        nikud_db[can_form] = unique(nikud_db[can_form]);
-    }        
+        user_nikud_db[can_form].push(selection);
+        user_nikud_db[can_form] = unique(user_nikud_db[can_form]);
+    }
+
+    save_db(user_nikud_db, user_db_filename);
 }
 
 void cb_stop(GtkWidget *widget, gpointer data)
@@ -461,9 +496,6 @@ void create_widgets()
     gtk_flow_box_set_homogeneous(GTK_FLOW_BOX(w_opt_flowbox), TRUE);
     gtk_box_pack_start(GTK_BOX(vbox2), w_opt_flowbox, FALSE, FALSE, 0);
     //    gtk_container_add(GTK_CONTAINER(w_sw_flow), w_opt_flowbox);
-
-    tab_buttons.push_back(gtk_button_new_with_label("Hello"));
-    gtk_flow_box_insert(GTK_FLOW_BOX(w_opt_flowbox), tab_buttons[0], -1);
 
     gtk_widget_show_all(w_mw);
 }
@@ -588,7 +620,7 @@ cb_menu_open_corpus (GtkAction *action, gpointer data)
 
     if (response == GTK_RESPONSE_ACCEPT) {
         char *selected_file = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(w_filechooser));
-        read_db(selected_file);
+        read_db(nikud_db, selected_file);
         g_free(selected_file);
     }
 
@@ -669,6 +701,9 @@ int main(int argc, char **argv)
     printf("config_dir = %s\n", config_dir);
 
     slip path = slip(config_dir) + "/lenaked.css";
+    user_db_filename = slip(config_dir) + "/lenaked_user_db.txt";
+    read_db(user_nikud_db, user_db_filename);
+
     if (g_file_test(path.c_str(), G_FILE_TEST_EXISTS)) 
         gtk_css_provider_load_from_path(GTK_CSS_PROVIDER(provider),
                                         path.c_str(),
@@ -687,7 +722,7 @@ int main(int argc, char **argv)
       GetModuleFileName(NULL, buffer, MAX_PATH);
       slip path(buffer);
       path.s("(.*)\\\\.*$","$1");  // Though there probably is a basename in glib...
-      read_db(path + "\\..\\nikud-db.utf8");
+      read_db(nikud_db, path + "\\..\\nikud-db.utf8");
 
       path = path + "\\..\\lenaked.css";
       if (g_file_test(path.c_str(), G_FILE_TEST_EXISTS)) 
@@ -697,7 +732,7 @@ int main(int argc, char **argv)
 
     }
 #else
-    read_db("../nikud-db.utf8");
+    read_db(nikud_db, "../nikud-db.utf8");
 #endif
 
     g_object_unref(provider);

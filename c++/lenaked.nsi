@@ -77,14 +77,27 @@ SetOutPath $INSTDIR\lib\gdk-pixbuf-2.0\2.10.0
 File /r ${SYSROOT}\mingw\lib\gdk-pixbuf-2.0\2.10.0\loaders
 SetOutPath $INSTDIR\share\themes 
 File /r ${SYSROOT}\mingw\share\themes\*
+#SetOutPath $INSTDIR\share\icons
+#File /r ${SYSROOT}\mingw\share\icons\Adwaita
+
 SetOutPath $INSTDIR\share\icons\Adwaita\16x16
 File /r ${SYSROOT}\mingw\share\icons\Adwaita\16x16\actions
+File /r ${SYSROOT}\mingw\share\icons\Adwaita\16x16\places
 SetOutPath $INSTDIR\share\icons\Adwaita\22x22
 File /r ${SYSROOT}\mingw\share\icons\Adwaita\22x22\actions
+File /r ${SYSROOT}\mingw\share\icons\Adwaita\22x22\places
 SetOutPath $INSTDIR\share\icons\Adwaita\48x48
 File /r ${SYSROOT}\mingw\share\icons\Adwaita\48x48\actions
+File /r ${SYSROOT}\mingw\share\icons\Adwaita\48x48\places
 SetOutPath $INSTDIR\share\icons\Adwaita\64x64
 File /r ${SYSROOT}\mingw\share\icons\Adwaita\64x64\actions
+File /r ${SYSROOT}\mingw\share\icons\Adwaita\64x64\places
+SetOutPath $INSTDIR\share\icons\Adwaita\scalable
+File /r ${SYSROOT}\mingw\share\icons\Adwaita\scalable\actions
+File /r ${SYSROOT}\mingw\share\icons\Adwaita\scalable\places
+
+SetOutPath $INSTDIR\share\glib-2.0
+File /r ${SYSROOT}\mingw\share\glib-2.0\schemas
 
 # Build the gdk-pixbuf.loaders file automatically
 #ExpandEnvStrings $0 %COMSPEC%
