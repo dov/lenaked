@@ -150,6 +150,11 @@ slip get_selection()
     return ret;
 }
 
+#define LETTER_BET "ב"
+#define LETTER_VAV "ו"
+#define LETTER_HE "ה"
+#define LETTER_MEM "מ"
+
 void create_matches()
 {
     destroy_buttons();
@@ -162,6 +167,34 @@ void create_matches()
         for (auto v : nikud_db[can_text])
             list.push_back(v);
     }
+
+    // Do some special cases for prefix letters.
+    if (can_text.starts_with(LETTER_BET)) {
+        slip prefix = "בְּ";
+        slip rest = can_text.substr(1);
+        for (auto v : nikud_db[rest])
+            list.push_back(prefix + v);
+    }
+    if (can_text.starts_with(LETTER_VAV)) {
+        slip prefix = "וְ";
+        slip rest = can_text.substr(1);
+        for (auto v : nikud_db[rest])
+            list.push_back(prefix + v);
+    }
+    if (can_text.starts_with(LETTER_MEM)) {
+        slip prefix = "מִ";
+        slip rest = can_text.substr(1);
+        for (auto v : nikud_db[rest])
+            list.push_back(prefix + v);
+    }
+    if (can_text.starts_with(LETTER_HE)) {
+        slip rest = can_text.substr(1);
+        for (const auto& prefix : { "הָ","הַ", "הֶ" }) {
+            for (auto v : nikud_db[rest])
+                list.push_back(prefix + v);
+        }
+    }
+    
 
     set<slip> seen;
     
